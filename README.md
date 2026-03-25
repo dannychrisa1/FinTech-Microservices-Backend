@@ -63,7 +63,7 @@ A scalable, production-ready fintech backend built with NestJS microservices arc
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/fintech-back.git
+git clone https://github.com/dannychrisa1/FinTech-Microservices-Backend.git
 cd fintech-back
 
 2. **Edit .env with your values**
