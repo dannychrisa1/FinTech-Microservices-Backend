@@ -1,0 +1,150 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: fintech_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fintech
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fintech_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: fintech_auth_service
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fintech?schema=public
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fintech_network
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: fintech_api_gateway
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fintech?schema=public
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
+      - PAYSTACK_SECRET=${PAYSTACK_SECRET}
+      - AUTH_SERVICE_HOST=auth-service
+      - AUTH_SERVICE_PORT=3001
+      - ACCOUNT_SERVICE_HOST=account-service
+      - ACCOUNT_SERVICE_PORT=3002
+      - PAYMENT_SERVICE_HOST=payment-service
+      - PAYMENT_SERVICE_PORT=3004
+      - TRANSACTION_SERVICE_HOST=transaction-service
+      - TRANSACTION_SERVICE_PORT=3003
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      account-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+    networks:
+      - fintech_network
+    restart: unless-stopped
+
+  # Account Service
+  account-service:
+    build:
+      context: .
+      dockerfile: apps/account-service/Dockerfile
+    container_name: fintech_account_service
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fintech?schema=public
+      - TRANSACTION_SERVICE_HOST=transaction-service
+      - TRANSACTION_SERVICE_PORT=3003
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      transaction-service:
+        condition: service_started
+    networks:
+      - fintech_network
+    restart: unless-stopped
+
+  # Transaction Service
+  transaction-service:
+    build:
+      context: .
+      dockerfile: apps/transaction-service/Dockerfile
+    container_name: fintech_transaction_service
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fintech?schema=public
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fintech_network
+    restart: unless-stopped
+
+  # Payment Service
+  payment-service:
+    build:
+      context: .
+      dockerfile: apps/payment-service/Dockerfile
+    container_name: fintech_payment_service
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fintech?schema=public
+      - PAYSTACK_SECRET=${PAYSTACK_SECRET}
+      - ACCOUNT_SERVICE_HOST=account-service
+      - ACCOUNT_SERVICE_PORT=3002
+    ports:
+      - "3004:3004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      account-service:
+        condition: service_started
+    networks:
+      - fintech_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  fintech_network:
+    driver: bridge

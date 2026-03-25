@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Payment {
+  id              Int        @id @default(autoincrement())
+  reference       String     @unique
+  email           String
+  amount          Float
+  status          String     @default("pending")
+  processed       Boolean    @default(false)
+  processedAt     DateTime?
+  userId          String?
+  user            User?      @relation(fields: [userId], references: [id])
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  accountNumber String   @unique
+  password      String
+  createdAt     DateTime @default(now())
+  account       Account?
+  payments      Payment[]
+}
+
+model Account {
+  id      String @id @default(uuid())
+  balance Float  @default(0)
+  userId  String @unique
+  user    User   @relation(fields: [userId], references: [id])
+
+  sentTransactions     Transaction[] @relation("FromAccount")
+  recievedTransactions Transaction[] @relation("ToAccount")
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  type          String // DEPOSIT | WITHDRAW | TRANSFER
+  amount        Float
+  fromAccountId String?
+  toAccountId   String?
+  createdAt     DateTime @default(now())
+
+  fromAccount Account? @relation("FromAccount", fields: [fromAccountId], references: [id])
+  toAccount   Account? @relation("ToAccount", fields: [toAccountId], references: [id])
+}
