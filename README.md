@@ -4,13 +4,32 @@ A scalable, production-ready fintech backend built with NestJS microservices arc
 
 ## ✨ Features
 
-- 🔐 **Authentication Service** - User registration, login, and JWT token management
-- 💰 **Account Service** - Manage user accounts and balances
-- 📊 **Transaction Service** - Record all financial transactions
-- 💳 **Payment Service** - Paystack payment integration with automatic deposits
-- 🚪 **API Gateway** - Single entry point for all client requests
-- 🐳 **Dockerized** - Complete containerization with Docker Compose
-- 📝 **Prisma ORM** - Type-safe database access with PostgreSQL
+### 🔐 Authentication & Security
+- **JWT Authentication** - Secure token-based authentication
+- **OTP Email Verification** - 6-digit code verification for new users
+- **Passcode Login** - 6-digit passcode for quick mobile access
+- **Password Reset** - OTP-based password recovery
+- **Account Lockout** - 5 failed attempts locks account for 15 minutes
+- **Bcrypt Hashing** - All passwords and passcodes are securely hashed
+
+### 💳 Payment Processing
+- **Paystack Integration** - Complete payment gateway integration
+- **Automatic Deposits** - Balance updates automatically on successful payment
+- **Transaction Tracking** - Full audit trail for all transactions
+- **Payment Verification** - Webhook and manual verification support
+
+## 🏦 Account Management
+- **Account Creation** - Automatic account number generation
+- **Balance Management** - Deposit, withdraw, and transfer funds
+- **Transaction History** - Complete transaction records
+- **Account Details** - View account information and balance
+
+### 🏗️ Architecture
+- **Microservices** - 5 independent services communicating via TCP
+- **API Gateway** - Single entry point for all client requests
+- **Docker Containerization** - Complete Docker setup with Docker Compose
+- **Database Versioning** - Prisma migrations for schema management
+- **Error Handling** - Global exception filters for consistent error responses
 
 ## 🏗️ Architecture
 ┌─────────────────┐
@@ -77,9 +96,17 @@ JWT_SECRET=your-super-secret-jwt-key-change-this
 # Paystack
 PAYSTACK_SECRET=sk_test_your_test_secret_key_here
 
+# Email Configuration (for OTP)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-specific-password
+
 # Service Hosts (for Docker)
 ACCOUNT_SERVICE_HOST=account-service
 PAYMENT_SERVICE_HOST=payment-service
 TRANSACTION_SERVICE_HOST=transaction-service
 AUTH_SERVICE_HOST=auth-service
+
+
 
