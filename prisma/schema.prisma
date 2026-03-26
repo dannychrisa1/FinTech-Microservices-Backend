@@ -23,14 +23,24 @@ model Payment {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  accountNumber String   @unique
-  password      String
-  createdAt     DateTime @default(now())
-  account       Account?
-  payments      Payment[]
+  id                  String     @id @default(cuid())
+  name                String
+  email               String     @unique
+  accountNumber       String     @unique
+  password            String
+  isEmailVerified     Boolean    @default(false)
+  emailVerifiedAt     DateTime?
+  otpCode             String?
+  otpExpiresAt        DateTime?
+  passcode            String?
+  isPasscodeSet       Boolean
+  passcodeSetAt       DateTime?
+  passcodeAttempts    Int        @default(0)
+  passcodeLockedUntil DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  account             Account?
+  payments            Payment[]
 }
 
 model Account {
