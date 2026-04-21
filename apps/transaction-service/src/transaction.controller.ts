@@ -8,6 +8,7 @@ export class TransactionController {
 
   @EventPattern('create-transaction')
   create(@Payload() data: any){
+      console.log('🔔 Received create-transaction event:', JSON.stringify(data, null, 2));
     return this.transactionService.createTransaction(data)
   }
 

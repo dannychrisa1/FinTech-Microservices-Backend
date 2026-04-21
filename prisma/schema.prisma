@@ -59,6 +59,7 @@ model Transaction {
   amount        Float
   fromAccountId String?
   toAccountId   String?
+  description   String? 
   createdAt     DateTime @default(now())
 
   fromAccount Account? @relation("FromAccount", fields: [fromAccountId], references: [id])

@@ -11,7 +11,8 @@ import { AuthModule } from '../auth/auth.module';
         name: 'TRANSACTION_SERVICE',
         transport: Transport.TCP,
         options: {
-          port: 3003,
+          host: process.env.TRANSACTION_SERVICE_HOST || 'localhost',
+          port: parseInt(process.env.TRANSACTION_SERVICE_PORT) || 3003,
         },
       },
       {

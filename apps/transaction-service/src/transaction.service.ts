@@ -1,5 +1,5 @@
+import { ApiResponse } from '@app/common/dto/api-response.dto';
 import { Injectable } from '@nestjs/common';
-import { RpcException } from '@nestjs/microservices';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
@@ -11,8 +11,31 @@ export class TransactionService {
     amount: number;
     fromAccountId?: string;
     toAccountId?: string;
+    description?: string;
   }) {
-    return this.prisma.transaction.create({ data });
+    const transaction = await this.prisma.transaction.create({ 
+       data: {
+          type: data.type,
+          amount: data.amount,
+          fromAccountId: data.fromAccountId,
+          toAccountId: data.toAccountId,
+          description: data?.description, 
+        }
+    });
+
+    let message = '';
+    switch (data.type) {
+      case 'DEPOSIT':
+        message = `Deposit of ${data.amount} was recorded successfully`;
+        break;
+      case 'WITHDRAW':
+        message = `Withdrawal of ${data.amount} was recorded successfully`;
+        break;
+      case 'TRANSFER':
+        message = `Transfer of ${data.amount} was recorded successfully`;
+        break;
+    }
+     return ApiResponse.success(transaction, message);
   }
 
   async getTransactions(payload: {
@@ -32,7 +55,10 @@ export class TransactionService {
       endDate,
     } = payload;
 
-    const skip = (page - 1) * limit;
+    // Ensure numbers (in case they come as strings)
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
 
     const where = {
       OR: [{ fromAccountId: accountId }, { toAccountId: accountId }],
@@ -51,19 +77,23 @@ export class TransactionService {
         where,
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take: limitNum,
       }),
       this.prisma.transaction.count({ where }),
     ]);
 
-    return {
-      data: transactions,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+    return ApiResponse.success(
+      {
+        transactions,
+        meta: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limit),
+        },
       },
-    };
+      'Transactions retrieved successfully'
+    );
+   
   }
 }

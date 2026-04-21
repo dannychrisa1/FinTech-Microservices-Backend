@@ -16,8 +16,8 @@ export class PaymentController {
   }
 
   @MessagePattern('verify-payment')
-  verify(@Payload() payload: { reference: string }) {
-    return this.paymentService.verifyAndDeposit(payload.reference);
+  verify(@Payload() payload: { reference: string; email:string }) {
+    return this.paymentService.verifyAndDeposit(payload.reference, payload.email);
   }
 
   //Method to handle Payment webhooks

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { TransactionController } from './transaction.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AuthModule } from '../auth/auth.module';
 // import { ClientsModule, Transport } from '@nestjs/microservices';
 
 @Module({
@@ -10,17 +11,21 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
       {
         name: 'ACCOUNT_SERVICE',
         transport: Transport.TCP,
-        options: { port: 3002 },
+         options: {
+          host: process.env.ACCOUNT_SERVICE_HOST || 'account-service',
+          port: parseInt(process.env.ACCOUNT_SERVICE_PORT) || 3002,
+        },
       },
       {
         name: 'TRANSACTION_SERVICE',
         transport: Transport.TCP,
         options: {
           host: process.env.TRANSACTION_SERVICE_HOST || 'localhost',
-          port: parseInt(process.env.ACCOUNT_SERVICE_PORT) || 3003, // This should match your transaction microservice port
+          port: parseInt(process.env.TRANSACTION_SERVICE_PORT) || 3003, // This should match your transaction microservice port
         },
       },
     ]),
+    AuthModule,
   ],
   providers: [TransactionService],
   controllers: [TransactionController]

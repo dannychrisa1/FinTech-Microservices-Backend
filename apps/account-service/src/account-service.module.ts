@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AccountController } from './account.controller';
 import { AccountService } from './account.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { RedisModule } from 'libs/common/redis/redis.module';
 
 @Module({
   imports: [
@@ -10,11 +11,12 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
         name: 'TRANSACTION_SERVICE',
         transport: Transport.TCP,
         options: {
-          host: '127.0.0.1',
-          port: 3003, // This should match your transaction service port
+          host: process.env.TRANSACTION_SERVICE_HOST || 'transaction-service',
+          port: parseInt(process.env.TRANSACTION_SERVICE_PORT) || 3003,
         },
       },
     ]),
+    RedisModule,
   ],
   controllers: [AccountController],
   providers: [AccountService],

@@ -21,6 +21,22 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: fintech_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - fintech_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Auth Service
   auth-service:
     build:
@@ -36,6 +52,8 @@ services:
       - EMAIL_PORT=${EMAIL_PORT:-587}
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASS=${EMAIL_PASS}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "3001:3001"
     depends_on:
@@ -92,6 +110,8 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fintech?schema=public
       - TRANSACTION_SERVICE_HOST=transaction-service
       - TRANSACTION_SERVICE_PORT=3003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "3002:3002"
     depends_on:
@@ -148,6 +168,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   fintech_network:

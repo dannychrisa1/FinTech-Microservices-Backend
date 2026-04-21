@@ -1,15 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { RpcException } from '@nestjs/microservices';
 
 import * as bcrypt from 'bcrypt';
-import { EmailService } from './email.service';
 import { randomInt } from 'crypto';
+import { QueueService } from './queue.service';
+import { ApiResponse } from '@app/common/dto/api-response.dto';
+import { RpcCustomException } from '@app/common';
 
 @Injectable()
 export class AuthService {
   private prisma = new PrismaClient();
-  constructor(private emailService: EmailService) {}
+  constructor(private queueService: QueueService) {}
 
   //Register
   async register(name: string, email: string, password: string) {
@@ -18,7 +19,7 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new RpcException('User with this email already exists');
+      throw new RpcCustomException('User with this email already exists', 409);
     }
 
     //Hash the Pssword
@@ -56,17 +57,18 @@ export class AuthService {
     });
 
     //Send OTP email
-    await this.emailService.sendOtpEmail(email, name, otpCode);
+    await this.queueService.sendOtpEmail(email, name, otpCode);
 
-    return {
-      message: 'User registered succesfully',
-      data: {
+    return ApiResponse.success(
+      {
+        id: user.id,
         name: user.name,
         email: user.email,
         accountNumber: user.accountNumber,
         requiresVerification: true,
       },
-    };
+      'User registered succesfully.Please verify your email with the OTP sent.',
+    );
   }
 
   //Verify OTP
@@ -77,19 +79,19 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     if (user.isEmailVerified) {
-      throw new RpcException('Email already verified');
+      throw new RpcCustomException('Email already verified', 409);
     }
 
     if (user.otpCode !== otp) {
-      throw new RpcException('Invalid OTP code');
+      throw new RpcCustomException('Invalid OTP code', 400);
     }
 
     if (user.otpExpiresAt < new Date()) {
-      throw new RpcException('OTP has expired. Please request a new one');
+      throw new RpcCustomException('OTP has expired. Please request a new one', 400);
     }
 
     //update user as verified
@@ -106,22 +108,23 @@ export class AuthService {
 
     //Send Welcome Email with Account Number
 
-    await this.emailService.sendPasscodeSetupEmail(
+    await this.queueService.sendWelcomeEmail(
       email,
       user.name,
       user.accountNumber,
     );
 
-    return {
-      message:
-        'Email verified successfully! Please setup your passcode to continue.',
-      data: {
+    return ApiResponse.success(
+      {
+        id: updatedUser.id,
         email: updatedUser.email,
         name: updatedUser.name,
         accountNumber: updatedUser.accountNumber,
         requiresPasscodeSetup: true,
+        verifiedAt: new Date().toISOString(),
       },
-    };
+      'Email verified successfully! Please setup your passcode to continue.',
+    );
   }
 
   //Resend OTP
@@ -132,11 +135,11 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     if (user.isEmailVerified) {
-      throw new RpcException('Email already verified');
+      throw new RpcCustomException('Email already verified', 409);
     }
 
     //Generate new OTP
@@ -153,11 +156,14 @@ export class AuthService {
 
     //Send new OTP email
 
-    await this.emailService.sendOtpEmail(email, user.name, otpCode);
+    await this.queueService.sendOtpEmail(email, user.name, otpCode);
 
-    return {
-      message: 'New OTP sent to your email',
-    };
+    return ApiResponse.success(
+      {
+        expiresInMinutes: 10,
+      },
+      'New OTP sent to your email',
+    );
   }
 
   //Setup Passcode
@@ -165,7 +171,7 @@ export class AuthService {
   async setupPasscode(email: string, passcode: string) {
     //Validate passcode(6 digits)
     if (!/^\d{6}$/.test(passcode)) {
-      throw new RpcException('Passcode must be 6 digits');
+      throw new RpcCustomException('Passcode must be 6 digits', 400);
     }
 
     const user = await this.prisma.user.findUnique({
@@ -173,15 +179,15 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     if (!user.isEmailVerified) {
-      throw new RpcException('Please verify your email first');
+      throw new RpcCustomException('Please verify your email first', 403);
     }
 
     if (user.isPasscodeSet) {
-      throw new RpcException('Passcode already set');
+      throw new RpcCustomException('Passcode already set', 409);
     }
 
     const hashedPasscode = await bcrypt.hash(passcode, 10);
@@ -195,15 +201,17 @@ export class AuthService {
       },
     });
 
-    return {
-      message: 'Passcode set successfully',
-      data: {
+    return ApiResponse.success(
+      {
+        id: updatedUser.id,
         email: updatedUser.email,
         name: updatedUser.name,
         accountNumber: updatedUser.accountNumber,
         isPasscodeSet: updatedUser.isPasscodeSet,
+        passcodeSetAt: updatedUser.passcodeSetAt?.toISOString(),
       },
-    };
+      'Passcode set successfully',
+    );
   }
 
   //Login With Password
@@ -215,23 +223,25 @@ export class AuthService {
     });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      throw new RpcException('Invalid email or password');
+      throw new RpcCustomException('Invalid email or password', 401);
     }
 
     if (!user.isEmailVerified) {
-      throw new RpcException('Please verify your email first');
+      throw new RpcCustomException('Please verify your email first', 403);
     }
 
-    return {
-      message: 'Login successful',
-      data: {
+    return ApiResponse.success(
+      {
+        id: user.id,
         name: user.name,
         email: user.email,
         accountNumber: user.accountNumber,
         balance: user.account.balance,
         isPasscodeSet: user.isPasscodeSet,
+        lastLoginAt: new Date().toISOString(),
       },
-    };
+      'Login successful',
+    );
   }
 
   //Login with Passcode
@@ -243,16 +253,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     if (!user.isEmailVerified) {
-      throw new RpcException('Please verify your email first');
+      throw new RpcCustomException('Please verify your email first', 403);
     }
 
     if (!user.isPasscodeSet) {
-      throw new RpcException(
+      throw new RpcCustomException(
         'No passcode set. Please login with password first.',
+        409
       );
     }
 
@@ -261,8 +272,9 @@ export class AuthService {
       const remainingMinutes = Math.ceil(
         (user.passcodeLockedUntil.getTime() - Date.now()) / 60000,
       );
-      throw new RpcException(
+      throw new RpcCustomException(
         `Account locked. Try again after ${remainingMinutes} minutes`,
+        423
       );
     }
 
@@ -286,8 +298,9 @@ export class AuthService {
       });
 
       const remainingAttempts = 5 - newAttempts;
-      throw new RpcException(
+      throw new RpcCustomException(
         `Invalid passcode. ${remainingAttempts} attempts remaining`,
+        401
       );
     }
 
@@ -300,16 +313,18 @@ export class AuthService {
       },
     });
 
-    return {
-      message: 'Login successful',
-      data: {
+    return ApiResponse.success(
+      {
+        id: user.id,
         name: user.name,
         email: user.email,
         accountNumber: user.accountNumber,
         balance: user.account.balance,
         isPasscodeSet: user.isPasscodeSet,
+        lastLoginAt: new Date().toISOString(),
       },
-    };
+      'Login successful',
+    );
   }
 
   //Update Passcode
@@ -321,7 +336,7 @@ export class AuthService {
   ) {
     // Validate new passcode (6 digits)
     if (!/^\d{6}$/.test(newPasscode)) {
-      throw new RpcException('New passcode must be 6 digits');
+      throw new RpcCustomException('New passcode must be 6 digits', 400);
     }
 
     const user = await this.prisma.user.findUnique({
@@ -329,17 +344,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     if (!user.isPasscodeSet) {
-      throw new RpcException('No passcode set');
+      throw new RpcCustomException('No passcode set', 409);
     }
 
     const isPasscodeValid = await bcrypt.compare(oldPasscode, user.passcode);
 
     if (!isPasscodeValid) {
-      throw new RpcException('Invalid current passcode');
+      throw new RpcCustomException('Invalid current passcode', 401);
     }
 
     const hashedNewPasscode = await bcrypt.hash(newPasscode, 10);
@@ -352,9 +367,13 @@ export class AuthService {
       },
     });
 
-    return {
-      message: 'Passcode updated successfully',
-    };
+    return ApiResponse.success(
+      {
+        isPasscodeSet: true,
+        updatedAt: new Date().toISOString(),
+      },
+      'Passcode updated successfully',
+    );
   }
 
   //Disable Passcode
@@ -365,17 +384,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     if (!user.isPasscodeSet) {
-      throw new RpcException('No passcode set');
+      throw new RpcCustomException('No passcode set', 409);
     }
 
     const isPasscodeValid = await bcrypt.compare(passcode, user.passcode);
 
     if (!isPasscodeValid) {
-      throw new RpcException('Invalid passcode');
+      throw new RpcCustomException('Invalid passcode', 401);
     }
 
     await this.prisma.user.update({
@@ -387,9 +406,13 @@ export class AuthService {
       },
     });
 
-    return {
-      message: 'Passcode disabled successfully',
-    };
+    return ApiResponse.success(
+      {
+        isPasscodeSet: false,
+        disabledAt: new Date().toISOString(),
+      },
+      'Passcode disabled successfully'
+    );
   }
 
   //Forgot Password
@@ -400,7 +423,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     // Generate reset code
@@ -416,11 +439,14 @@ export class AuthService {
     });
 
     // Send reset code email
-    await this.emailService.sendResetPasswordEmail(email, user.name, resetCode);
+    await this.queueService.sendResetPasswordEmail(email, user.name, resetCode);
 
-    return {
-      message: 'Password reset code sent to your email',
-    };
+    return ApiResponse.success(
+      {
+        expiresInMinutes: 10,
+      },
+      'Password reset code sent to your email',
+    );
   }
 
   //Reset Password
@@ -431,15 +457,15 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new RpcException('User not found');
+      throw new RpcCustomException('User not found', 404);
     }
 
     if (user.otpCode !== code) {
-      throw new RpcException('Invalid reset code');
+      throw new RpcCustomException('Invalid reset code', 401);
     }
 
     if (user.otpExpiresAt < new Date()) {
-      throw new RpcException('Reset code expired');
+      throw new RpcCustomException('Reset code expired', 400);
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -453,8 +479,12 @@ export class AuthService {
       },
     });
 
-    return {
-      message: 'Password reset successful',
-    };
+    return ApiResponse.success(
+      {
+        email: user.email,
+        resetAt: new Date().toISOString(),
+      },
+      'Password reset successful'
+    );
   }
 }
